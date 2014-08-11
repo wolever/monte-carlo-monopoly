@@ -194,10 +194,6 @@ int main(int argc, char *argv[]){
 				}
 			}
 
-			//Increase all the counters
-			board[location].count+=1;
-			hit_count[location][laps]+=1;
-
 			/* Check to see if we are on "action" spaces {{{*/
 			switch(board[location].type){
 			case GOTOJAIL:
@@ -222,6 +218,10 @@ int main(int argc, char *argv[]){
 				com_card++;
 				break;
 			}
+
+			//Increase all the counters
+			board[location].count+=1;
+			hit_count[location][laps]+=1;
 			/* }}} */
 		}
 	}
@@ -262,7 +262,7 @@ int main(int argc, char *argv[]){
 		printf("Max hits: %'d (%0.1f%%) Min hits: %'d (%0.1f%%)\n",
 				max_hits, max_hits / total_hits * 100,
 				min_hits, min_hits / total_hits * 100);
-		printf("Each '+' represents %.2f hits\n",
+		printf("Each '+' represents %.2f turns where the player finished their turn on the space.\n",
 				max_hits / (float)term_width);
 	}
 	/* }}} */
