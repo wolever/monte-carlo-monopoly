@@ -4,6 +4,9 @@
 #include <time.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <locale.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
 /*}}}*/
 
 /* Some #defines {{{*/
@@ -56,10 +59,6 @@
 
 /* }}} */
 
-/* And some macros... {{{ */
-#define roll_dice ((rand() % 6) + (rand() % 6) + 2)
-/* }}} */
-
 /* Some structures {{{ */
 struct ccard {
 	int moveto;
@@ -94,20 +93,24 @@ int main(int argc, char *argv[]){
 	struct ccard *com_card;
 
 	/* And other variables */
-	int term_width = 80;
-	int laps,game, games=100, game_length=GAME_LENGTH;
+	struct winsize w;
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+
+	int term_width = w.ws_col - 40;
+	int laps,game, games=10000, game_length=GAME_LENGTH;
 	int location; //Where the player is on the board
+	int d1, d2, double_count = 0;
 
 	int argi,arg_error = 0;
 	char *c;
 
 	int count;
 	int min_hits, max_hits = 0;
+	float total_hits = 0;
 	int export_csv = 0;
 	
-	/* Initialize the random number generator */
 	srand(time(NULL));
-	/* }}} */
+	setlocale(LC_NUMERIC, "");
 
 	/* Check any command line arguments {{{*/
 	for (argi = 1; argi < argc && argv[argi][0] == '-'; argi++){
@@ -117,11 +120,11 @@ int main(int argc, char *argv[]){
 				printf("Usage:\n\tmonopoly [-g <games>] [-l <length>] [-c] [-h]\n");
 				return 0;
 			case 'g':
- 				games = atoi(argv[++argi]);
+				games = atoi(argv[++argi]);
 				break;
 
 			case 'l': 
- 				game_length = atoi(argv[++argi]);
+				game_length = atoi(argv[++argi]);
 				break;
 
 			case 'c':
@@ -161,17 +164,34 @@ int main(int argc, char *argv[]){
 	/* }}} */
 
 	/* Now for the main loop {{{ */
-	printf("Playing %d game%s of monopoly (where, in a game, the player passes go %d time%s)\n",games, games>1?"s":"",game_length,game_length>1?"s":"");
+	printf("Playing %'d game%s of monopoly (where, in a game, the player passes go %'d time%s)\n",games, games>1?"s":"",game_length,game_length>1?"s":"");
 	for (game = 0; game < games; game++){
 		location=GO;
 		laps = 0;
 		while (laps < game_length){
 			//Move the "piece" forward
-			location += roll_dice;
+			d1 = rand() % 6 + 1;
+			d2 = rand() % 6 + 1;
 
-			if (location >= 40){
-				laps++;
-				location -= 40;
+			if (d1 == d2 && location != JAIL) {
+				double_count += 1;
+			} else {
+				double_count = 0;
+			}
+
+			if (double_count >= 3) {
+				//Move to jail on three doubles in a row. Assumes that the
+				//player will always pay $50 to leave jail on the first roll
+				//(as opposed to waiting for doubles).
+				location = JAIL;
+				double_count = 0;
+			} else {
+				location += d1 + d2;
+
+				if (location >= 40){
+					laps++;
+					location -= 40;
+				}
 			}
 
 			//Increase all the counters
@@ -229,17 +249,21 @@ int main(int argc, char *argv[]){
 
 			if (board[count].count < min_hits)
 				min_hits = board[count].count;
+
+			total_hits += board[count].count;
 		}
 
 		for (count = 0; count < 40; count++){
 			printf("%20s |", board[count].name);
-			for (game = 0; game < (int)((board[count].count - min_hits) * ((float)term_width / (max_hits - min_hits))); game++)
+			for (game = 0; game < (int)(board[count].count * ((float)term_width / max_hits)); game++)
 				printf("+");
-			printf(" (%d)\n",board[count].count);
+			printf(" (%0.01f%%; %'d)\n", board[count].count / total_hits * 100, board[count].count);
 		}
-		printf("Max hits: %d Min hits: %d\n",max_hits,min_hits);
-		printf("Each '+' represents %.2f hits (plus an initial correction of %d)\n",
-				(max_hits - min_hits) / (float)term_width,min_hits);
+		printf("Max hits: %'d (%0.1f%%) Min hits: %'d (%0.1f%%)\n",
+				max_hits, max_hits / total_hits * 100,
+				min_hits, min_hits / total_hits * 100);
+		printf("Each '+' represents %.2f hits\n",
+				max_hits / (float)term_width);
 	}
 	/* }}} */
 		
