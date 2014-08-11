@@ -197,6 +197,7 @@ int main(int argc, char *argv[]){
 			/* Check to see if we are on "action" spaces {{{*/
 			switch(board[location].type){
 			case GOTOJAIL:
+				board[location].count += 1;
 				location = JAIL;
 				break;
 			case CHANCE:
@@ -244,6 +245,11 @@ int main(int argc, char *argv[]){
 		min_hits = board[0].count;
 		max_hits = board[0].count;
 		for (count = 0; count < 40; count++){
+			if (board[count].type == GOTOJAIL) {
+				//The count on GOTOJAIL is special, so do not consider it in
+				//the normal count.
+				continue;
+			}
 			if (board[count].count > max_hits)
 				max_hits = board[count].count;
 
@@ -254,11 +260,20 @@ int main(int argc, char *argv[]){
 		}
 
 		for (count = 0; count < 40; count++){
-			printf("%20s |", board[count].name);
+			if (board[count].type == GOTOJAIL) {
+				printf("%16s (*) |", board[count].name);
+			} else {
+				printf("%20s |", board[count].name);
+			}
 			for (game = 0; game < (int)(board[count].count * ((float)term_width / max_hits)); game++)
 				printf("+");
 			printf(" (%0.01f%%; %'d)\n", board[count].count / total_hits * 100, board[count].count);
 		}
+		printf("\n");
+		printf("*: The Go To Jail space is counted separately because a piece will never\n");
+		printf("   be on the space at the end of the turn. Instead, this count represents\n");
+		printf("   the number of times a piece landed on this space.\n");
+		printf("\n");
 		printf("Max hits: %'d (%0.1f%%) Min hits: %'d (%0.1f%%)\n",
 				max_hits, max_hits / total_hits * 100,
 				min_hits, min_hits / total_hits * 100);
