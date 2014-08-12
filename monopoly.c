@@ -30,20 +30,20 @@
 /* }}} */
 
 /* Now #define the 'types' used in struct space {{{*/
-#define PURPLE	1
-#define CCHEST 2
-#define TAX 3
-#define RAILROAD 4
-#define LIGHTBLUE 5
-#define CHANCE 6
-#define INDIGO 7
-#define UTILITY 8
-#define ORANGE 9
-#define RED 10
-#define YELLOW 11
-#define GOTOJAIL 12
-#define GREEN 13
-#define BLUE 14
+#define PURPLE	101
+#define CCHEST 102
+#define TAX 103
+#define RAILROAD 104
+#define LIGHTBLUE 105
+#define CHANCE 106
+#define INDIGO 107
+#define UTILITY 108
+#define ORANGE 109
+#define RED 110
+#define YELLOW 111
+#define GOTOJAIL 112
+#define GREEN 113
+#define BLUE 114
 /* }}} */
 
 /* These are the things that could appear on chance cards {{{ */
@@ -70,14 +70,15 @@ struct space {
 	int value;
 	char type;
 	int count;
+	int land_count;
 };
 /* }}} */
 
-	/* Functions {{{*/
-	void mkboard (struct space *);
-	void mkdeck (struct ccard *,char);
-	int card_move(int,struct ccard *);
-	/*}}}*/
+/* Functions {{{*/
+void mkboard (struct space *);
+void mkdeck (struct ccard *,char);
+int card_move(int,struct ccard *);
+/*}}}*/
 
 /* monopoly.c - Emulate a game of monopoly {{{*/
 int main(int argc, char *argv[]){
@@ -97,9 +98,12 @@ int main(int argc, char *argv[]){
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 
 	int term_width = w.ws_col - 40;
-	int laps,game, games=10000, game_length=GAME_LENGTH;
+	int laps,game, games=1000000, game_length=GAME_LENGTH;
 	int location; //Where the player is on the board
+	int new_location;
 	int d1, d2, double_count = 0;
+	int show_land_counts = 1;
+	int show_total_counts = 1;
 
 	int argi,arg_error = 0;
 	char *c;
@@ -107,7 +111,7 @@ int main(int argc, char *argv[]){
 	int count;
 	int min_hits, max_hits = 0;
 	float total_hits = 0;
-	int export_csv = 0;
+	struct space *cur_space;
 	
 	srand(time(NULL));
 	setlocale(LC_NUMERIC, "");
@@ -117,8 +121,11 @@ int main(int argc, char *argv[]){
 		for (c = &argv[argi][1]; *c != '\0'; c++){
 			switch(*c){
 			case 'h':
-				printf("Usage:\n\tmonopoly [-g <games>] [-l <length>] [-c] [-h]\n");
+				printf("Usage:\n\tmonopoly [-g <games>] [-l <length>] [-t|-T] [-h]\n");
+				printf(" -t: show only total counts\n");
+				printf(" -T: show only land counts\n");
 				return 0;
+
 			case 'g':
 				games = atoi(argv[++argi]);
 				break;
@@ -127,8 +134,14 @@ int main(int argc, char *argv[]){
 				game_length = atoi(argv[++argi]);
 				break;
 
-			case 'c':
-				export_csv = 1;
+			case 't': 
+				show_land_counts = 0;
+				show_total_counts = 1;
+				break;
+
+			case 'T': 
+				show_land_counts = 1;
+				show_total_counts = 0;
 				break;
 
 			default:
@@ -154,13 +167,6 @@ int main(int argc, char *argv[]){
 	//Make the board
 	mkboard(&board[0]);
 	location = GO;
-
-	for (count = 0; count < 40; count++){
-		if (!(hit_count[count]=calloc(game_length,sizeof(int)))){
-			printf ("Could not alloc memory for hit_count at line __LINE__\n");
-			return 1;
-		}
-	}
 	/* }}} */
 
 	/* Now for the main loop {{{ */
@@ -187,7 +193,6 @@ int main(int argc, char *argv[]){
 				double_count = 0;
 			} else {
 				location += d1 + d2;
-
 				if (location >= 40){
 					laps++;
 					location -= 40;
@@ -195,91 +200,102 @@ int main(int argc, char *argv[]){
 			}
 
 			/* Check to see if we are on "action" spaces {{{*/
+			new_location = location;
 			switch(board[location].type){
 			case GOTOJAIL:
-				board[location].count += 1;
-				location = JAIL;
+				new_location = JAIL;
 				break;
 			case CHANCE:
-				if ((location = card_move(location,chance_card)) < 0){
-					location *= -1;
-					//uh ho! we have to re-set the deck
+				while ((new_location = card_move(location, chance_card)) < 0) {
 					chance_card = &chance_deck[0];
-					location = card_move(location,chance_card);
 				}
 				chance_card++;
 				break;
 			case CCHEST:
-				if ((location = card_move(location,com_card)) < 0){
-					location *= -1;
-					//uh ho! we have to re-set the deck
+				while ((new_location = card_move(location,com_card)) < 0) {
 					com_card = &com_deck[0];
-					location = card_move(location,com_card);
 				}
 				com_card++;
 				break;
 			}
 
 			//Increase all the counters
-			board[location].count+=1;
-			hit_count[location][laps]+=1;
+			board[location].land_count += 1;
+			board[new_location].count += 1;
+			location = new_location;
 			/* }}} */
 		}
 	}
 	/* }}} */
 
 	/* Print the results {{{ */
-	if (export_csv){
-		printf("Space,");
-		for (count = 1; count <= game_length; count++)
-			printf("Lap %d,",count);
-		printf("Total\n");
-
-		for (game = 0; game < 40; game++){
-			printf("%s,",board[game].name);
-			for (count = 0; count < game_length; count++)
-				printf("%d,",hit_count[game][count]);
-			printf("%d\n", board[game].count);
+	min_hits = board[0].count;
+	max_hits = board[0].count;
+	for (count = 0; count < 40; count++){
+		if (board[count].type == GOTOJAIL) {
+			//The count on GOTOJAIL is special, so do not consider it in
+			//the normal count.
+			continue;
 		}
-	} else {
-		min_hits = board[0].count;
-		max_hits = board[0].count;
-		for (count = 0; count < 40; count++){
-			if (board[count].type == GOTOJAIL) {
-				//The count on GOTOJAIL is special, so do not consider it in
-				//the normal count.
-				continue;
-			}
-			if (board[count].count > max_hits)
-				max_hits = board[count].count;
+		if (board[count].count > max_hits)
+			max_hits = board[count].count;
 
-			if (board[count].count < min_hits)
-				min_hits = board[count].count;
+		if (board[count].count < min_hits)
+			min_hits = board[count].count;
 
-			total_hits += board[count].count;
-		}
-
-		for (count = 0; count < 40; count++){
-			if (board[count].type == GOTOJAIL) {
-				printf("%16s (*) |", board[count].name);
-			} else {
-				printf("%20s |", board[count].name);
-			}
-			for (game = 0; game < (int)(board[count].count * ((float)term_width / max_hits)); game++)
-				printf("+");
-			printf(" (%0.01f%%; %'d)\n", board[count].count / total_hits * 100, board[count].count);
-		}
-		printf("\n");
-		printf("*: The Go To Jail space is counted separately because a piece will never\n");
-		printf("   be on the space at the end of the turn. Instead, this count represents\n");
-		printf("   the number of times a piece landed on this space.\n");
-		printf("\n");
-		printf("Max hits: %'d (%0.1f%%) Min hits: %'d (%0.1f%%)\n",
-				max_hits, max_hits / total_hits * 100,
-				min_hits, min_hits / total_hits * 100);
-		printf("Each '+' represents %.2f turns where the player finished their turn on the space.\n",
-				max_hits / (float)term_width);
+		total_hits += board[count].count;
 	}
+
+	int diff;
+	float tick_size = (float)term_width / max_hits;
+	for (count = 0; count < 40; count++) {
+		cur_space = &board[count];
+		int count_to_show = show_land_counts? cur_space->count : cur_space->land_count;
+		if (cur_space->type != GOTOJAIL) {
+			printf("%20s |", cur_space->name);
+			for (game = 0; game < (int)(count_to_show * tick_size); game++)
+				printf((show_total_counts || cur_space->count == cur_space->land_count)? "=" : "-");
+			printf(" %0.01f%%\n", count_to_show / total_hits * 100);
+		}
+
+		if (cur_space->type == JAIL) {
+			int in_jail_count = cur_space->count - cur_space->land_count;
+			printf("%20s |", "incarcerated");
+			for (game = 0; game < (int)(in_jail_count * tick_size); game++)
+				printf("x");
+			diff = in_jail_count - count_to_show;
+			printf(" %0.01f%% (%s%0.01f%%)\n",
+					in_jail_count / total_hits * 100,
+					diff > 0? "+" : "",
+					diff / total_hits * 100);
+		}
+
+		if (show_land_counts && show_total_counts && cur_space->count != cur_space->land_count) {
+			printf("%16s (*) |", (cur_space->type == JAIL)? "visiting" : "land");
+			for (game = 0; game < (int)(cur_space->land_count * tick_size); game++)
+				printf("-");
+			diff = cur_space->land_count - cur_space->count;
+			printf(" %0.01f%% (%s%0.01f%%)\n",
+					cur_space->land_count / total_hits * 100,
+					diff > 0? "+" : "",
+					diff / total_hits * 100);
+		}
+	}
+	printf("\n");
+	if (show_land_counts) {
+		printf("*: The 'land count' (-) is the total number of times the space was\n");
+		printf("   landed on 'naturally' (ie, immidiately after rolling the dice).\n");
+		printf("   This is in contrast with the regular count (=), which shows the\n");
+		printf("   number of turns which *finished* on a space (ie, after moving.\n");
+		printf("   because of 'go to jail' or a Chance/CC card).\n");
+	}
+
+	printf("\n");
+	printf("Max hits: %'d (%0.1f%%) Min hits: %'d (%0.1f%%)\n",
+			max_hits, max_hits / total_hits * 100,
+			min_hits, min_hits / total_hits * 100);
+	printf("Each '=' represents %'0.2f turns where the player finished their turn on the space.\n",
+			1 / tick_size);
 	/* }}} */
 		
 	return 0;
@@ -425,6 +441,8 @@ void mkboard (struct space *board){
 
 /* get_space: Get the value of a certan space on the board and put it in putme {{{*/
 void get_space(int number,struct space *putme){
+	putme->land_count = 0;
+
 	switch (number){
 	case 0: //Go
 		strcpy(putme->name,"Go");
