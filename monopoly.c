@@ -278,9 +278,9 @@ int main(int argc, char *argv[]){
 	}
 	printf("\n");
 	printf("Legend:\n");
-	printf("=: the player ended their turn on this space\n");
-	printf(">: the player landed on this space but moved before ending their turn\n");
-	printf("-: both of the above\n");
+	printf("-: player landed and finished their turn on this space\n");
+	printf(">: player landed but did not finish their turn on this space\n");
+	printf("=: player finished their but did not land on this space (ie, they were moved to it)\n");
 	printf("x: the player was put into jail\n");
 
 	printf("\n");
