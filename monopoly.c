@@ -232,11 +232,6 @@ int main(int argc, char *argv[]){
 	min_hits = board[0].count;
 	max_hits = board[0].count;
 	for (count = 0; count < 40; count++){
-		if (board[count].type == GOTOJAIL) {
-			//The count on GOTOJAIL is special, so do not consider it in
-			//the normal count.
-			continue;
-		}
 		if (board[count].count > max_hits)
 			max_hits = board[count].count;
 
@@ -247,22 +242,27 @@ int main(int argc, char *argv[]){
 	}
 
 	int diff;
-	float tick_size = (float)term_width / max_hits;
+	float cur_step;
+	float tick_step = max_hits / (float)term_width;
 	for (count = 0; count < 40; count++) {
 		cur_space = &board[count];
-		int count_to_show = show_land_counts? cur_space->count : cur_space->land_count;
-		if (cur_space->type != GOTOJAIL) {
-			printf("%20s |", cur_space->name);
-			for (game = 0; game < (int)(count_to_show * tick_size); game++)
-				printf((show_total_counts || cur_space->count == cur_space->land_count)? "=" : "-");
-			printf(" %0.01f%%\n", count_to_show / total_hits * 100);
+		int count_to_show = (
+			cur_space->type == GOTOJAIL? cur_space->land_count :
+			show_land_counts? cur_space->count :
+			cur_space->land_count
+		);
+		printf("%20s |", cur_space->name);
+		for (cur_step = 0; cur_step < count_to_show; cur_step += tick_step) {
+			printf(count_to_show == cur_space->count? "=" : "-");
 		}
+		printf(" %0.01f%%\n", count_to_show / total_hits * 100);
 
-		if (cur_space->type == JAIL) {
+		if (show_total_counts && cur_space->type == JAIL) {
 			int in_jail_count = cur_space->count - cur_space->land_count;
 			printf("%20s |", "incarcerated");
-			for (game = 0; game < (int)(in_jail_count * tick_size); game++)
+			for (cur_step = 0; cur_step < in_jail_count; cur_step += tick_step) {
 				printf("x");
+			}
 			diff = in_jail_count - count_to_show;
 			printf(" %0.01f%% (%s%0.01f%%)\n",
 					in_jail_count / total_hits * 100,
@@ -270,9 +270,9 @@ int main(int argc, char *argv[]){
 					diff / total_hits * 100);
 		}
 
-		if (show_land_counts && show_total_counts && cur_space->count != cur_space->land_count) {
+		if (count_to_show != cur_space->land_count) {
 			printf("%16s (*) |", (cur_space->type == JAIL)? "visiting" : "land");
-			for (game = 0; game < (int)(cur_space->land_count * tick_size); game++)
+			for (cur_step = 0; cur_step < cur_space->land_count; cur_step += tick_step)
 				printf("-");
 			diff = cur_space->land_count - cur_space->count;
 			printf(" %0.01f%% (%s%0.01f%%)\n",
@@ -284,7 +284,7 @@ int main(int argc, char *argv[]){
 	printf("\n");
 	if (show_land_counts) {
 		printf("*: The 'land count' (-) is the total number of times the space was\n");
-		printf("   landed on 'naturally' (ie, immidiately after rolling the dice).\n");
+		printf("   landed on 'naturally' (ie, immediately after rolling the dice).\n");
 		printf("   This is in contrast with the regular count (=), which shows the\n");
 		printf("   number of turns which *finished* on a space (ie, after moving.\n");
 		printf("   because of 'go to jail' or a Chance/CC card).\n");
@@ -294,8 +294,8 @@ int main(int argc, char *argv[]){
 	printf("Max hits: %'d (%0.1f%%) Min hits: %'d (%0.1f%%)\n",
 			max_hits, max_hits / total_hits * 100,
 			min_hits, min_hits / total_hits * 100);
-	printf("Each '=' represents %'0.2f turns where the player finished their turn on the space.\n",
-			1 / tick_size);
+	printf("Each '=' represents %'0.1f turns where the player finished their turn on the space.\n",
+			tick_step);
 	/* }}} */
 		
 	return 0;
