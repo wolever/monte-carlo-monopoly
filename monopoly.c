@@ -55,6 +55,7 @@
 
 /* Other #defines {{{ */
 #define GAME_LENGTH 10 //The default game length
+#define DECK_SIZE 17
 #define max(a, b) ((a) > (b)? (a) : (b))
 #define min(a, b) ((a) < (b)? (a) : (b))
 /* }}} */
@@ -80,19 +81,20 @@ struct space {
 void mkboard (struct space *);
 void mkdeck (struct ccard *,char);
 int card_move(int,struct ccard *);
+void shuffle_deck(struct ccard array[]);
 /*}}}*/
+
 
 /* monopoly.c - Emulate a game of monopoly {{{*/
 int main(int argc, char *argv[]){
 	/* Declare variables {{{*/
 	/* Set up the "board" as an array of spaces */
 	struct space board[40];
-	int *hit_count[40]; //The default game length
 
 	/* And comunity chest/chance */
-	struct ccard chance_deck[17];
+	struct ccard chance_deck[DECK_SIZE];
 	struct ccard *chance_card;
-	struct ccard com_deck[17];
+	struct ccard com_deck[DECK_SIZE];
 	struct ccard *com_card;
 
 	/* And other variables */
@@ -100,7 +102,7 @@ int main(int argc, char *argv[]){
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 
 	int term_width = w.ws_col - 42;
-	int laps,game, games=1000000, game_length=GAME_LENGTH;
+	int laps, game, games=1000000, game_length=GAME_LENGTH;
 	int location; //Where the player is on the board
 	int new_location;
 	int d1, d2, double_count = 0;
@@ -162,10 +164,8 @@ int main(int argc, char *argv[]){
 	/* Ok, now its time to set everything up {{{*/
 	//Make chance deck
 	mkdeck(&chance_deck[0],'?');
-	chance_card = &chance_deck[0];
 	//Make the comunity chest deck
 	mkdeck(&com_deck[0],'$');
-	com_card = &com_deck[0];
 	//Make the board
 	mkboard(&board[0]);
 	location = GO;
@@ -176,6 +176,10 @@ int main(int argc, char *argv[]){
 	for (game = 0; game < games; game++){
 		location=GO;
 		laps = 0;
+		shuffle_deck(com_deck);
+		com_card = &com_deck[0];
+		shuffle_deck(chance_deck);
+		chance_card = &chance_deck[0];
 		while (laps < game_length){
 			//Move the "piece" forward
 			d1 = rand() % 6 + 1;
@@ -209,12 +213,14 @@ int main(int argc, char *argv[]){
 				break;
 			case CHANCE:
 				while ((new_location = card_move(location, chance_card)) < 0) {
+					shuffle_deck(chance_deck);
 					chance_card = &chance_deck[0];
 				}
 				chance_card++;
 				break;
 			case CCHEST:
-				while ((new_location = card_move(location,com_card)) < 0) {
+				while ((new_location = card_move(location, com_card)) < 0) {
+					shuffle_deck(com_deck);
 					com_card = &com_deck[0];
 				}
 				com_card++;
@@ -243,7 +249,6 @@ int main(int argc, char *argv[]){
 		total_hits += board[count].count;
 	}
 
-	int diff;
 	float cur_step;
 	float tick_step = max_hits / (float)term_width;
 	for (count = 0; count < 40; count++) {
@@ -652,6 +657,19 @@ void get_space(int number,struct space *putme){
 		putme->type	= BLUE;
 		putme->count	= 0;
 		break;
+	}
+}
+
+void shuffle_deck(struct ccard array[]) {
+	size_t n = DECK_SIZE - 1; // Leave the NULLCARD at the end
+	if (n > 1) {
+		size_t i;
+		for (i = 0; i < n - 1; i++) {
+		  size_t j = i + rand() / (RAND_MAX / (n - i) + 1);
+		  struct ccard t = array[j];
+		  array[j] = array[i];
+		  array[i] = t;
+		}
 	}
 }
 /* }}} */
