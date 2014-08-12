@@ -55,6 +55,8 @@
 
 /* Other #defines {{{ */
 #define GAME_LENGTH 10 //The default game length
+#define max(a, b) ((a) > (b)? (a) : (b))
+#define min(a, b) ((a) < (b)? (a) : (b))
 /* }}} */
 
 /* }}} */
@@ -97,7 +99,7 @@ int main(int argc, char *argv[]){
 	struct winsize w;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 
-	int term_width = w.ws_col - 40;
+	int term_width = w.ws_col - 42;
 	int laps,game, games=1000000, game_length=GAME_LENGTH;
 	int location; //Where the player is on the board
 	int new_location;
@@ -121,9 +123,9 @@ int main(int argc, char *argv[]){
 		for (c = &argv[argi][1]; *c != '\0'; c++){
 			switch(*c){
 			case 'h':
-				printf("Usage:\n\tmonopoly [-g <games>] [-l <length>] [-t|-T] [-h]\n");
-				printf(" -t: show only total counts\n");
-				printf(" -T: show only land counts\n");
+				printf("usage: %s [-g <games>] [-l <length>] [-t|-T] [-h]\n", argv[0]);
+				printf("-t: show only total counts\n");
+				printf("-T: show only land counts\n");
 				return 0;
 
 			case 'g':
@@ -246,55 +248,41 @@ int main(int argc, char *argv[]){
 	float tick_step = max_hits / (float)term_width;
 	for (count = 0; count < 40; count++) {
 		cur_space = &board[count];
+		int min_count = min(cur_space->count, cur_space->land_count);
+		int max_count = max(cur_space->count, cur_space->land_count);
 		int count_to_show = (
-			cur_space->type == GOTOJAIL? cur_space->land_count :
-			show_land_counts? cur_space->count :
-			cur_space->land_count
+			show_land_counts && show_total_counts? max_count :
+			show_land_counts? cur_space->land_count :
+			cur_space->count
 		);
 		printf("%20s |", cur_space->name);
 		for (cur_step = 0; cur_step < count_to_show; cur_step += tick_step) {
-			printf(count_to_show == cur_space->count? "=" : "-");
+			printf(
+				cur_step < cur_space->count && cur_step < cur_space->land_count? "-" :
+				cur_step < cur_space->count? (cur_space->type == JAIL? "x" : "=") :
+				cur_step < cur_space->land_count? ">" :
+				"?"
+			);
 		}
+		if (min_count < count_to_show)
+			printf(" %0.01f%% (%s%0.01f%%)",
+					min_count / total_hits * 100,
+					(count_to_show - min_count) > 0? "+" : "",
+					(count_to_show - min_count) / total_hits * 100);
 		printf(" %0.01f%%\n", count_to_show / total_hits * 100);
-
-		if (show_total_counts && cur_space->type == JAIL) {
-			int in_jail_count = cur_space->count - cur_space->land_count;
-			printf("%20s |", "incarcerated");
-			for (cur_step = 0; cur_step < in_jail_count; cur_step += tick_step) {
-				printf("x");
-			}
-			diff = in_jail_count - count_to_show;
-			printf(" %0.01f%% (%s%0.01f%%)\n",
-					in_jail_count / total_hits * 100,
-					diff > 0? "+" : "",
-					diff / total_hits * 100);
-		}
-
-		if (count_to_show != cur_space->land_count) {
-			printf("%16s (*) |", (cur_space->type == JAIL)? "visiting" : "land");
-			for (cur_step = 0; cur_step < cur_space->land_count; cur_step += tick_step)
-				printf("-");
-			diff = cur_space->land_count - cur_space->count;
-			printf(" %0.01f%% (%s%0.01f%%)\n",
-					cur_space->land_count / total_hits * 100,
-					diff > 0? "+" : "",
-					diff / total_hits * 100);
-		}
 	}
 	printf("\n");
-	if (show_land_counts) {
-		printf("*: The 'land count' (-) is the total number of times the space was\n");
-		printf("   landed on 'naturally' (ie, immediately after rolling the dice).\n");
-		printf("   This is in contrast with the regular count (=), which shows the\n");
-		printf("   number of turns which *finished* on a space (ie, after moving.\n");
-		printf("   because of 'go to jail' or a Chance/CC card).\n");
-	}
+	printf("Legend:\n");
+	printf("=: the player ended their turn on this space\n");
+	printf(">: the player landed on this space but moved before ending their turn\n");
+	printf("-: both of the above\n");
+	printf("x: the player was put into jail\n");
 
 	printf("\n");
 	printf("Max hits: %'d (%0.1f%%) Min hits: %'d (%0.1f%%)\n",
 			max_hits, max_hits / total_hits * 100,
 			min_hits, min_hits / total_hits * 100);
-	printf("Each '=' represents %'0.1f turns where the player finished their turn on the space.\n",
+	printf("Each '-' represents %'0.1f turns\n",
 			tick_step);
 	/* }}} */
 		
