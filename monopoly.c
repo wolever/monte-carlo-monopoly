@@ -290,7 +290,7 @@ int main(int argc, char *argv[]){
 	printf("Each '-' represents %'0.1f turns\n",
 			tick_step);
 	/* }}} */
-		
+
 	return 0;
 }
 /* }}} */
@@ -318,7 +318,7 @@ int card_move(int piece, struct ccard *card){
 			piece -= 3;
 			break;
 		case CARD_END:
-			return piece * -1;
+			return -1;
 			break;
 		default:
 			piece=card->moveto;
@@ -333,20 +333,11 @@ int card_move(int piece, struct ccard *card){
 void mkdeck(struct ccard *deck, char type){
 	void get_chance(int,struct ccard *);
 	void get_cchest(int,struct ccard *);
-	int count,card,check_count;
-	int used[16];
+	int card;
 
-	for (count = 0; count < 16; count++){
+	for (card = 0; card < 16; card++){
 		/* Change this to use pointers to the functions */
-		card = rand() % 16;	
-		for (check_count=0; check_count < 16; check_count++){
-			if (used[check_count] == card){
-				card = rand() % 16;
-				check_count = -1;
-			}
-		}
-
-		type == '?'? get_chance(card,deck) : get_cchest(card, deck);
+		type == '?'? get_chance(card, deck) : get_cchest(card, deck);
 		deck++;
 	}
 	
@@ -661,7 +652,7 @@ void get_space(int number,struct space *putme){
 }
 
 void shuffle_deck(struct ccard array[]) {
-	size_t n = DECK_SIZE - 1; // Leave the NULLCARD at the end
+	size_t n = DECK_SIZE - 1; // Leave the CARD_END at the end
 	if (n > 1) {
 		size_t i;
 		for (i = 0; i < n - 1; i++) {
